@@ -19,4 +19,4 @@ export interface MarketData {
   lastUpdated: string;
 }
 
-export type TimeRange = "1D" | "1W" | "1M" | "3M" | "6M" | "1Y" | "YTD";
+export type TimeRange = "1D" | "1W" | "1M" | "3M" | "6M" | "1Y" | "YTD" | "ALL";

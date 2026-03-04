@@ -6,9 +6,10 @@ interface MoversTableProps {
   title: string;
   data: StockMover[];
   type: "gainers" | "losers";
+  onSelectStock?: (symbol: string) => void;
 }
 
-export default function MoversTable({ title, data, type }: MoversTableProps) {
+export default function MoversTable({ title, data, type, onSelectStock }: MoversTableProps) {
   const isGainer = type === "gainers";
 
   return (
@@ -38,7 +39,10 @@ export default function MoversTable({ title, data, type }: MoversTableProps) {
             {data.map((stock, index) => (
               <tr
                 key={stock.symbol}
-                className="border-b border-sage/5 transition-colors hover:bg-sage/5"
+                onClick={() => onSelectStock?.(stock.symbol)}
+                className={`border-b border-sage/5 transition-colors hover:bg-sage/5 ${
+                  onSelectStock ? "cursor-pointer" : ""
+                }`}
               >
                 <td className="py-3 pr-4 text-sage/40">{index + 1}</td>
                 <td className="py-3 pr-4 font-medium text-ivory">
@@ -51,24 +55,14 @@ export default function MoversTable({ title, data, type }: MoversTableProps) {
                   ${stock.price.toFixed(2)}
                 </td>
                 <td className="py-3 pr-4 text-right">
-                  <div className="flex flex-col items-end">
-                    <span
-                      className={`font-mono text-sm ${
-                        isGainer ? "text-moss-light" : "text-red-400"
-                      }`}
-                    >
-                      {isGainer ? "+" : ""}
-                      {stock.change.toFixed(2)}
-                    </span>
-                    <span
-                      className={`text-xs ${
-                        isGainer ? "text-moss-light/70" : "text-red-400/70"
-                      }`}
-                    >
-                      {isGainer ? "+" : ""}
-                      {stock.changePercent.toFixed(2)}%
-                    </span>
-                  </div>
+                  <span
+                    className={`font-mono text-sm ${
+                      isGainer ? "text-moss-light" : "text-red-400"
+                    }`}
+                  >
+                    {isGainer ? "+" : ""}
+                    {stock.changePercent.toFixed(2)}%
+                  </span>
                 </td>
                 <td className="py-3 text-right text-sage/60">{stock.volume}</td>
               </tr>

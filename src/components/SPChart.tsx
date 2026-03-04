@@ -1,27 +1,81 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { createChart, IChartApi, LineStyle, LineSeries } from "lightweight-charts";
 import { ChartDataPoint, TimeRange } from "@/lib/types";
+import { SP500_COMPANIES } from "@/lib/market-data";
 
-const TIME_RANGES: TimeRange[] = ["1D", "1W", "1M", "3M", "6M", "1Y", "YTD"];
+const TIME_RANGES: TimeRange[] = ["1D", "1W", "1M", "3M", "6M", "1Y", "YTD", "ALL"];
 
 interface SPChartProps {
   initialData: ChartDataPoint[];
+  selectedSymbol: string | null;
+  onSymbolChange: (symbol: string | null) => void;
 }
 
-export default function SPChart({ initialData }: SPChartProps) {
+export default function SPChart({ initialData, selectedSymbol, onSymbolChange }: SPChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const [activeRange, setActiveRange] = useState<TimeRange>("3M");
   const [chartData, setChartData] = useState<ChartDataPoint[]>(initialData);
   const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  const filteredCompanies = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    return SP500_COMPANIES.filter(
+      (c) =>
+        c.symbol.toLowerCase().includes(q) ||
+        c.name.toLowerCase().includes(q)
+    ).slice(0, 8);
+  }, [searchQuery]);
+
+  const selectedCompany = useMemo(() => {
+    if (!selectedSymbol) return null;
+    return SP500_COMPANIES.find((c) => c.symbol === selectedSymbol) || null;
+  }, [selectedSymbol]);
+
+  const displayName = selectedCompany ? selectedCompany.name : "S&P 500";
+  const displaySymbol = selectedSymbol || "SPX";
 
   const latestValue = chartData.length > 0 ? chartData[chartData.length - 1].value : 0;
   const firstValue = chartData.length > 0 ? chartData[0].value : 0;
   const change = latestValue - firstValue;
   const changePercent = firstValue !== 0 ? (change / firstValue) * 100 : 0;
   const isPositive = change >= 0;
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Fetch data when symbol or range changes
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ range: activeRange });
+        if (selectedSymbol) params.set("symbol", selectedSymbol);
+        const res = await fetch(`/api/market?${params}`);
+        const data = await res.json();
+        setChartData(data.chart);
+      } catch (err) {
+        console.error("Failed to fetch chart data:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [selectedSymbol, activeRange]);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -89,32 +143,75 @@ export default function SPChart({ initialData }: SPChartProps) {
     };
   }, [chartData, isPositive]);
 
-  const handleRangeChange = async (range: TimeRange) => {
+  const handleRangeChange = (range: TimeRange) => {
     setActiveRange(range);
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/market?range=${range}`);
-      const data = await res.json();
-      setChartData(data.chart);
-    } catch (err) {
-      console.error("Failed to fetch chart data:", err);
-    } finally {
-      setLoading(false);
-    }
+  };
+
+  const handleSelectCompany = (symbol: string) => {
+    onSymbolChange(symbol);
+    setSearchQuery("");
+    setShowDropdown(false);
+  };
+
+  const handleClearSymbol = () => {
+    onSymbolChange(null);
+    setSearchQuery("");
   };
 
   return (
     <div className="rounded-xl border border-sage/20 bg-eerie p-6">
+      {/* Search bar */}
+      <div className="mb-4" ref={searchRef}>
+        <div className="relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setShowDropdown(true);
+            }}
+            onFocus={() => {
+              if (searchQuery.trim()) setShowDropdown(true);
+            }}
+            placeholder="Search by company name or ticker..."
+            className="w-full rounded-lg border border-sage/20 bg-eerie px-4 py-2.5 text-sm text-ivory placeholder-sage/40 outline-none transition-colors focus:border-moss"
+          />
+          {selectedSymbol && (
+            <button
+              onClick={handleClearSymbol}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-sage/60 hover:text-ivory text-xs"
+            >
+              Clear
+            </button>
+          )}
+          {showDropdown && filteredCompanies.length > 0 && (
+            <div className="absolute z-20 mt-1 w-full rounded-lg border border-sage/20 bg-eerie shadow-lg">
+              {filteredCompanies.map((company) => (
+                <button
+                  key={company.symbol}
+                  onClick={() => handleSelectCompany(company.symbol)}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-sage/10 first:rounded-t-lg last:rounded-b-lg"
+                >
+                  <span className="font-medium text-ivory">{company.symbol}</span>
+                  <span className="text-sage/60">{company.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-ivory">S&P 500</h2>
+            <h2 className="text-lg font-semibold text-ivory">{displayName}</h2>
             <span className="rounded bg-moss/20 px-2 py-0.5 text-xs font-medium text-moss-light">
-              SPX
+              {displaySymbol}
             </span>
           </div>
           <div className="mt-1 flex items-baseline gap-3">
             <span className="text-2xl font-bold text-ivory">
+              {selectedSymbol ? "$" : ""}
               {latestValue.toLocaleString("en-US", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
