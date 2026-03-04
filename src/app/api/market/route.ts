@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getMarketData } from "@/lib/market-data";
 import { TimeRange } from "@/lib/types";
 
-const VALID_RANGES: TimeRange[] = ["1D", "1W", "1M", "3M", "6M", "1Y", "YTD"];
+const VALID_RANGES: TimeRange[] = ["1D", "1W", "1M", "3M", "6M", "1Y", "YTD", "ALL"];
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const range = (searchParams.get("range") || "3M") as TimeRange;
+  const symbol = searchParams.get("symbol") || undefined;
 
   if (!VALID_RANGES.includes(range)) {
     return NextResponse.json(
@@ -15,6 +16,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const data = getMarketData(range);
+  const data = getMarketData(range, symbol);
   return NextResponse.json(data);
 }

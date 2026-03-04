@@ -24,6 +24,9 @@ function generateSPChartData(range: TimeRange): ChartDataPoint[] {
     case "1Y":
       days = 365;
       break;
+    case "ALL":
+      days = 365 * 5;
+      break;
     case "YTD": {
       const startOfYear = new Date(now.getFullYear(), 0, 1);
       days = Math.floor(
@@ -64,7 +67,7 @@ function generateSPChartData(range: TimeRange): ChartDataPoint[] {
   return points;
 }
 
-const SP500_COMPANIES = [
+export const SP500_COMPANIES = [
   { symbol: "AAPL", name: "Apple Inc." },
   { symbol: "MSFT", name: "Microsoft Corp." },
   { symbol: "NVDA", name: "NVIDIA Corp." },
@@ -96,6 +99,82 @@ const SP500_COMPANIES = [
   { symbol: "NFLX", name: "Netflix Inc." },
   { symbol: "KO", name: "Coca-Cola Co." },
 ];
+
+function generateStockChartData(symbol: string, range: TimeRange): ChartDataPoint[] {
+  const now = new Date();
+  const points: ChartDataPoint[] = [];
+
+  let days: number;
+  switch (range) {
+    case "1D":
+      days = 1;
+      break;
+    case "1W":
+      days = 7;
+      break;
+    case "1M":
+      days = 30;
+      break;
+    case "3M":
+      days = 90;
+      break;
+    case "6M":
+      days = 180;
+      break;
+    case "1Y":
+      days = 365;
+      break;
+    case "ALL":
+      days = 365 * 5;
+      break;
+    case "YTD": {
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      days = Math.floor(
+        (now.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      break;
+    }
+    default:
+      days = 90;
+  }
+
+  // Create a symbol-specific seed
+  let symbolSeed = 0;
+  for (let i = 0; i < symbol.length; i++) {
+    symbolSeed = symbolSeed * 31 + symbol.charCodeAt(i);
+  }
+
+  const dateSeed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+  let pseudoRandom = (symbolSeed * 7919 + dateSeed) & 0x7fffffff;
+
+  const nextRandom = () => {
+    pseudoRandom = (pseudoRandom * 1103515245 + 12345) & 0x7fffffff;
+    return pseudoRandom / 0x7fffffff;
+  };
+
+  // Generate a base price from the symbol seed (50-600 range)
+  const basePrice = 50 + (Math.abs(symbolSeed) % 550);
+  const volatility = 0.01;
+  let currentValue = basePrice - days * 0.02;
+
+  for (let i = days; i >= 0; i--) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - i);
+
+    const dayOfWeek = date.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+
+    const randomFactor = (nextRandom() - 0.48) * volatility;
+    currentValue = currentValue * (1 + randomFactor);
+
+    points.push({
+      time: date.toISOString().split("T")[0],
+      value: Math.round(currentValue * 100) / 100,
+    });
+  }
+
+  return points;
+}
 
 function generateMovers(): { gainers: StockMover[]; losers: StockMover[] } {
   const seed = new Date();
@@ -149,8 +228,10 @@ function generateMovers(): { gainers: StockMover[]; losers: StockMover[] } {
   return { gainers, losers };
 }
 
-export function getMarketData(range: TimeRange) {
-  const chart = generateSPChartData(range);
+export function getMarketData(range: TimeRange, symbol?: string) {
+  const chart = symbol
+    ? generateStockChartData(symbol, range)
+    : generateSPChartData(range);
   const { gainers, losers } = generateMovers();
 
   return {
