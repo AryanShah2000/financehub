@@ -1,71 +1,5 @@
 import { ChartDataPoint, StockMover, TimeRange } from "./types";
-
-function generateSPChartData(range: TimeRange): ChartDataPoint[] {
-  const now = new Date();
-  const points: ChartDataPoint[] = [];
-
-  let days: number;
-  switch (range) {
-    case "1D":
-      days = 1;
-      break;
-    case "1W":
-      days = 7;
-      break;
-    case "1M":
-      days = 30;
-      break;
-    case "3M":
-      days = 90;
-      break;
-    case "6M":
-      days = 180;
-      break;
-    case "1Y":
-      days = 365;
-      break;
-    case "ALL":
-      days = 365 * 5;
-      break;
-    case "YTD": {
-      const startOfYear = new Date(now.getFullYear(), 0, 1);
-      days = Math.floor(
-        (now.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      break;
-    }
-    default:
-      days = 90;
-  }
-
-  const baseValue = 5200;
-  const volatility = 0.008;
-  let currentValue = baseValue - days * 0.5;
-
-  // Use a seeded approach based on the date so data is consistent within a day
-  const seed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-  let pseudoRandom = seed;
-
-  for (let i = days; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-
-    // Skip weekends
-    const dayOfWeek = date.getDay();
-    if (dayOfWeek === 0 || dayOfWeek === 6) continue;
-
-    pseudoRandom = (pseudoRandom * 1103515245 + 12345) & 0x7fffffff;
-    const randomFactor = (pseudoRandom / 0x7fffffff - 0.48) * volatility;
-    currentValue = currentValue * (1 + randomFactor);
-
-    points.push({
-      time: date.toISOString().split("T")[0],
-      value: Math.round(currentValue * 100) / 100,
-    });
-  }
-
-  return points;
-}
+import { fetchChartData, fetchTopMovers } from "./alpha-vantage";
 
 export const SP500_COMPANIES = [
   { symbol: "AAPL", name: "Apple Inc." },
@@ -100,50 +34,78 @@ export const SP500_COMPANIES = [
   { symbol: "KO", name: "Coca-Cola Co." },
 ];
 
+// --- Fallback simulated data generators ---
+
+function generateSPChartData(range: TimeRange): ChartDataPoint[] {
+  const now = new Date();
+  const points: ChartDataPoint[] = [];
+
+  let days: number;
+  switch (range) {
+    case "1D": days = 1; break;
+    case "1W": days = 7; break;
+    case "1M": days = 30; break;
+    case "3M": days = 90; break;
+    case "6M": days = 180; break;
+    case "1Y": days = 365; break;
+    case "ALL": days = 365 * 5; break;
+    case "YTD": {
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      days = Math.floor((now.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24));
+      break;
+    }
+    default: days = 90;
+  }
+
+  const baseValue = 5200;
+  const volatility = 0.008;
+  let currentValue = baseValue - days * 0.5;
+  const seed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+  let pseudoRandom = seed;
+
+  for (let i = days; i >= 0; i--) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - i);
+    const dayOfWeek = date.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+
+    pseudoRandom = (pseudoRandom * 1103515245 + 12345) & 0x7fffffff;
+    const randomFactor = (pseudoRandom / 0x7fffffff - 0.48) * volatility;
+    currentValue = currentValue * (1 + randomFactor);
+
+    points.push({
+      time: date.toISOString().split("T")[0],
+      value: Math.round(currentValue * 100) / 100,
+    });
+  }
+  return points;
+}
+
 function generateStockChartData(symbol: string, range: TimeRange): ChartDataPoint[] {
   const now = new Date();
   const points: ChartDataPoint[] = [];
 
   let days: number;
   switch (range) {
-    case "1D":
-      days = 1;
-      break;
-    case "1W":
-      days = 7;
-      break;
-    case "1M":
-      days = 30;
-      break;
-    case "3M":
-      days = 90;
-      break;
-    case "6M":
-      days = 180;
-      break;
-    case "1Y":
-      days = 365;
-      break;
-    case "ALL":
-      days = 365 * 5;
-      break;
+    case "1D": days = 1; break;
+    case "1W": days = 7; break;
+    case "1M": days = 30; break;
+    case "3M": days = 90; break;
+    case "6M": days = 180; break;
+    case "1Y": days = 365; break;
+    case "ALL": days = 365 * 5; break;
     case "YTD": {
       const startOfYear = new Date(now.getFullYear(), 0, 1);
-      days = Math.floor(
-        (now.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24)
-      );
+      days = Math.floor((now.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24));
       break;
     }
-    default:
-      days = 90;
+    default: days = 90;
   }
 
-  // Create a symbol-specific seed
   let symbolSeed = 0;
   for (let i = 0; i < symbol.length; i++) {
     symbolSeed = symbolSeed * 31 + symbol.charCodeAt(i);
   }
-
   const dateSeed = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
   let pseudoRandom = (symbolSeed * 7919 + dateSeed) & 0x7fffffff;
 
@@ -152,7 +114,6 @@ function generateStockChartData(symbol: string, range: TimeRange): ChartDataPoin
     return pseudoRandom / 0x7fffffff;
   };
 
-  // Generate a base price from the symbol seed (50-600 range)
   const basePrice = 50 + (Math.abs(symbolSeed) % 550);
   const volatility = 0.01;
   let currentValue = basePrice - days * 0.02;
@@ -160,7 +121,6 @@ function generateStockChartData(symbol: string, range: TimeRange): ChartDataPoin
   for (let i = days; i >= 0; i--) {
     const date = new Date(now);
     date.setDate(date.getDate() - i);
-
     const dayOfWeek = date.getDay();
     if (dayOfWeek === 0 || dayOfWeek === 6) continue;
 
@@ -172,16 +132,12 @@ function generateStockChartData(symbol: string, range: TimeRange): ChartDataPoin
       value: Math.round(currentValue * 100) / 100,
     });
   }
-
   return points;
 }
 
 function generateMovers(): { gainers: StockMover[]; losers: StockMover[] } {
   const seed = new Date();
-  const daySeed =
-    seed.getFullYear() * 10000 +
-    (seed.getMonth() + 1) * 100 +
-    seed.getDate();
+  const daySeed = seed.getFullYear() * 10000 + (seed.getMonth() + 1) * 100 + seed.getDate();
   let pseudoRandom = daySeed;
 
   const nextRandom = () => {
@@ -221,18 +177,40 @@ function generateMovers(): { gainers: StockMover[]; losers: StockMover[] } {
     };
   });
 
-  // Sort gainers descending by changePercent, losers ascending
   gainers.sort((a, b) => b.changePercent - a.changePercent);
   losers.sort((a, b) => a.changePercent - b.changePercent);
 
   return { gainers, losers };
 }
 
-export function getMarketData(range: TimeRange, symbol?: string) {
-  const chart = symbol
-    ? generateStockChartData(symbol, range)
-    : generateSPChartData(range);
-  const { gainers, losers } = generateMovers();
+// --- Public API: tries Alpha Vantage first, falls back to simulated data ---
+
+export async function getMarketData(range: TimeRange, symbol?: string) {
+  let chart: ChartDataPoint[];
+  let gainers: StockMover[];
+  let losers: StockMover[];
+
+  // Fetch chart data
+  try {
+    chart = await fetchChartData(range, symbol);
+  } catch (err) {
+    console.warn("Alpha Vantage chart fetch failed, using simulated data:", err);
+    chart = symbol
+      ? generateStockChartData(symbol, range)
+      : generateSPChartData(range);
+  }
+
+  // Fetch top movers
+  try {
+    const movers = await fetchTopMovers();
+    gainers = movers.gainers;
+    losers = movers.losers;
+  } catch (err) {
+    console.warn("Alpha Vantage movers fetch failed, using simulated data:", err);
+    const movers = generateMovers();
+    gainers = movers.gainers;
+    losers = movers.losers;
+  }
 
   return {
     chart,

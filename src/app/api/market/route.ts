@@ -16,6 +16,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const data = getMarketData(range, symbol);
+  const data = await getMarketData(range, symbol);
   return NextResponse.json(data);
 }
